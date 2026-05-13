@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<meta name="theme-color" content="#0b1220" />
+<meta name="description" content="Bedside decision-support for alcohol use, withdrawal and discharge — screening, severity, dosing, ASCII chart notes. Evidence-linked, offline-capable." />
+<link rel="manifest" href="./manifest.json" />
+<link rel="icon" type="image/svg+xml" href="./icon-192.svg" />
+<link rel="apple-touch-icon" href="./icon-192.svg" />
+<link rel="stylesheet" href="./styles.css" />
+<title>EtOH WD — Bedside</title>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="title"><span class="accent">EtOH</span> WD <span class="muted tiny">bedside</span></div>
+  <div class="spacer"></div>
+  <button id="btn-flow" title="Flow diagram">Flow</button>
+  <button id="btn-about" title="About / sources">i</button>
+  <button id="btn-new" class="danger" title="Clear patient">New pt</button>
+</header>
+
+<div class="context" id="context"></div>
+<div id="reco"></div>
+
+<main id="view-main">
+  <section class="block" id="block-screening">
+    <h2>Screening &amp; Risk</h2>
+    <div class="tile-grid" id="tiles-screening"></div>
+  </section>
+  <section class="block" id="block-active">
+    <h2>Active Withdrawal</h2>
+    <div class="tile-grid" id="tiles-active"></div>
+  </section>
+  <section class="block" id="block-icu">
+    <h2>ICU / Sedation / Delirium</h2>
+    <div class="tile-grid" id="tiles-icu"></div>
+  </section>
+  <section class="block" id="block-other">
+    <h2>Other</h2>
+    <div class="tile-grid" id="tiles-other"></div>
+  </section>
+</main>
+
+<main id="view-meds" hidden></main>
+<main id="view-note" hidden></main>
+<main id="view-forget" hidden></main>
+<main id="view-history" hidden></main>
+
+<div class="modal-back" id="modal-back" role="dialog" aria-modal="true">
+  <div class="modal">
+    <header class="modal-head">
+      <div class="name" id="modal-title">—</div>
+      <div class="spacer"></div>
+      <button class="close" id="modal-close" aria-label="Close">&times;</button>
+    </header>
+    <section class="modal-body" id="modal-body"></section>
+    <footer class="modal-foot" id="modal-foot"></footer>
+  </div>
+</div>
+
+<nav class="bottom-nav" id="nav">
+  <button data-view="main" class="active"><span class="ico">&#9678;</span><span>Scores</span></button>
+  <button data-view="meds"><span class="ico">&#9881;</span><span>Meds</span></button>
+  <button data-view="note"><span class="ico">&#9776;</span><span>Note</span></button>
+  <button data-view="forget"><span class="ico">&#9888;</span><span>Don't forget</span></button>
+  <button data-view="history"><span class="ico">&#8635;</span><span>Trend</span></button>
+</nav>
+
+<script src="./app.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    });
+  }
+</script>
+</body>
+</html>

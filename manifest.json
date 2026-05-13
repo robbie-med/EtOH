@@ -1,0 +1,26 @@
+{
+  "name": "EtOH Withdrawal Bedside Tool",
+  "short_name": "EtOH WD",
+  "description": "Mobile bedside decision-support for alcohol use, withdrawal, and discharge — screening, severity, dosing, and copy-paste chart notes. Evidence-linked.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "categories": ["medical", "health", "productivity"],
+  "icons": [
+    {
+      "src": "./icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
