@@ -175,8 +175,10 @@ AUDITC: {
   interpret(score) {
     if (score >= 4)  return { tier:'high', pill:'danger', text:'Positive screen (≥4)',
                               notes:['Sensitive for AUD; pursue AUDIT-10 or DSM-5 criteria.','Consider PAWSS if hospitalized.'] };
-    return                    { tier:'low', pill:'ok', text:'Negative screen (<4)',
-                              notes:['Re-screen periodically; lower threshold (≥3) for women.'] };
+    if (score === 3) return { tier:'high', pill:'warn', text:'Borderline (3) — positive in women',
+                              notes:['Canonical cutoff: ≥4 in men, ≥3 in women.','If patient is female, treat as positive: pursue AUDIT-10 or DSM-5 criteria.','If male, negative — re-screen periodically.'] };
+    return                    { tier:'low', pill:'ok', text:'Negative screen (<3)',
+                              notes:['Re-screen periodically.'] };
   }
 },
 
@@ -235,7 +237,7 @@ PAWSS: {
   category:'screening', cite: CITE.PAWSS,
   intro:'Predicts risk of moderate–severe withdrawal in hospitalized patients. Threshold ≥4 = high risk. Skip if no alcohol in last 30 days AND BAL = 0.',
   items: [
-    {q:'Have you consumed alcohol in the last 30 days OR BAL > 0 on admission?', opts:[{label:'No', value:0},{label:'Yes', value:1}], helper:'Threshold item — if "No", PAWSS is 0 and further items are not applicable.'},
+    {q:'Have you consumed alcohol in the last 30 days OR BAL > 0 on admission?', opts:[{label:'No', value:0},{label:'Yes', value:1}], helper:'Scored 0/1 like every other item. PAWSS is intended for patients with recent alcohol exposure; if neither criterion is met, the instrument should not be administered.'},
     {q:'Previous episodes of alcohol withdrawal (any severity)?', opts:[{label:'No', value:0},{label:'Yes', value:1}]},
     {q:'Previous alcohol withdrawal seizures?', opts:[{label:'No', value:0},{label:'Yes', value:1}]},
     {q:'Previous delirium tremens?', opts:[{label:'No', value:0},{label:'Yes', value:1}]},
