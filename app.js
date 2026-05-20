@@ -17,10 +17,10 @@ const CITE = {
   AUDITC: { text: 'Bush K et al. The AUDIT-C. Arch Intern Med. 1998;158:1789-95.', url: 'https://pubmed.ncbi.nlm.nih.gov/9738608/' },
   CAGE: { text: 'Ewing JA. Detecting alcoholism: the CAGE questionnaire. JAMA. 1984;252:1905-7.', url: 'https://pubmed.ncbi.nlm.nih.gov/6471323/' },
   DSM5: { text: 'NIAAA. Alcohol Use Disorder: A comparison between DSM-IV and DSM-5.', url: 'https://www.niaaa.nih.gov/publications/brochures-and-fact-sheets/alcohol-use-disorder-comparison-between-dsm' },
-  PAWSS: { text: 'Maldonado JR et al. PAWSS validation. Alcohol. 2014;48:375-90; Alcohol Alcohol. 2015;50:509-18.', url: 'https://pubmed.ncbi.nlm.nih.gov/25956618/' },
+  PAWSS: { text: 'Maldonado JR et al. PAWSS. Alcohol. 2014;48:375-90 (pilot); validated Alcohol Alcohol. 2015;50:509-18.', url: 'https://pubmed.ncbi.nlm.nih.gov/24657098/' },
   CIWA: { text: 'Sullivan JT et al. CIWA-Ar. Br J Addict. 1989;84:1353-7.', url: 'https://pubmed.ncbi.nlm.nih.gov/2597811/' },
-  GMAWS: { text: 'McPherson A et al. GMAWS. Alcohol Alcohol. 2012. NHS GG&C protocol.', url: 'https://www.clinicalguidelines.scot.nhs.uk/ggc-paediatric-clinical-guidelines/ggc-guidelines/emergency-medicine/alcohol-withdrawal-management-of/' },
-  MINDS: { text: 'DeCarolis DD et al. MINDS for alcohol withdrawal. Pharmacotherapy. 2007;27:510-8.', url: 'https://pubmed.ncbi.nlm.nih.gov/17381378/' },
+  GMAWS: { text: 'McPherson A et al. Appraisal of the Glasgow assessment and management of alcohol guideline (GMAWS). QJM. 2012;105:649-56.', url: 'https://pubmed.ncbi.nlm.nih.gov/22328545/' },
+  MINDS: { text: 'DeCarolis DD et al. Symptom-driven lorazepam protocol (MINDS) for severe alcohol withdrawal delirium in the ICU. Pharmacotherapy. 2007;27:510-8.', url: 'https://pubmed.ncbi.nlm.nih.gov/17381377/' },
   RASS: { text: 'Sessler CN et al. RASS. Am J Respir Crit Care Med. 2002;166:1338-44.', url: 'https://pubmed.ncbi.nlm.nih.gov/12421743/' },
   SAS: { text: 'Riker RR et al. SAS. Crit Care Med. 1999;27:1325-9.', url: 'https://pubmed.ncbi.nlm.nih.gov/10446827/' },
   CAMICU: { text: 'Ely EW et al. CAM-ICU. JAMA. 2001;286:2703-10. (icudelirium.org)', url: 'https://www.icudelirium.org/medical-professionals/delirium/monitoring-delirium-in-the-icu' },
@@ -30,7 +30,7 @@ const CITE = {
   MUELLER: { text: 'Mueller SW et al. Dexmedetomidine for alcohol withdrawal. Crit Care Med. 2014;42:1131-9.', url: 'https://pubmed.ncbi.nlm.nih.gov/24351375/' },
   WERNICKE: { text: 'Royal College / EFNS guidance on thiamine in suspected Wernicke encephalopathy.', url: 'https://onlinelibrary.wiley.com/doi/10.1111/j.1468-1331.2010.03153.x' },
   NALTREXONE: { text: 'VA/DoD Substance Use Disorder Guideline 2021 (naltrexone, acamprosate).', url: 'https://www.healthquality.va.gov/guidelines/MH/sud/' },
-  MAT: { text: 'SAMHSA TIP 49 — Incorporating Alcohol Pharmacotherapies Into Medical Practice.', url: 'https://store.samhsa.gov/product/TIP-49-Incorporating-Alcohol-Pharmacotherapies-Into-Medical-Practice/SMA13-4380' }
+  MAT: { text: 'SAMHSA TIP 49 — Incorporating Alcohol Pharmacotherapies Into Medical Practice.', url: 'https://www.samhsa.gov/resource/ebp/tip-49-incorporating-alcohol-pharmacotherapies-medical-practice' }
 };
 
 /* ============================================================
@@ -693,6 +693,95 @@ function mostRecent(ids) {
 }
 
 /* ============================================================
+   PER-SCORE TIER ACTIONS
+   Score-specific quick recommendations keyed off the saved tier.
+   Surfaced both on scored tiles and inside the result modal so
+   dosing / next-step buttons are always one tap from any score.
+   ============================================================ */
+function tierActions(scoreId, tier) {
+  const goMeds = () => showView('meds');
+  const goScore = (id) => () => openScore(id);
+  const T = {
+    CIWA: {
+      'very-severe': [{label:'Phenobarb / ICU pathway', primary:true, run:goMeds},
+                      {label:'Add RASS', run:goScore('RASS')},
+                      {label:'CAM-ICU', run:goScore('CAMICU')}],
+      severe: [{label:'Front-load / phenobarb', primary:true, run:goMeds},
+               {label:'Add RASS', run:goScore('RASS')}],
+      moderate: [{label:'Benzo dosing', primary:true, run:goMeds},
+                 {label:'Repeat CIWA', run:goScore('CIWA')}],
+      'mild-mod': [{label:'Benzo dosing', primary:true, run:goMeds},
+                   {label:'Repeat CIWA', run:goScore('CIWA')}],
+      mild: [{label:'Supportive care', run:goMeds},
+             {label:'Repeat CIWA', run:goScore('CIWA')}]
+    },
+    GMAWS: {
+      severe: [{label:'Front-load / phenobarb', primary:true, run:goMeds},
+               {label:'Add RASS', run:goScore('RASS')}],
+      moderate: [{label:'Benzo dosing', primary:true, run:goMeds},
+                 {label:'Repeat GMAWS', run:goScore('GMAWS')}],
+      mild: [{label:'Supportive care', run:goMeds},
+             {label:'Repeat GMAWS', run:goScore('GMAWS')}],
+      none: [{label:'Repeat in 2–4 h', run:goScore('GMAWS')}]
+    },
+    MINDS: {
+      'very-severe': [{label:'ICU / phenobarb ± dex', primary:true, run:goMeds},
+                      {label:'Add RASS', run:goScore('RASS')},
+                      {label:'CAM-ICU', run:goScore('CAMICU')}],
+      moderate: [{label:'Benzo dosing q1h', primary:true, run:goMeds},
+                 {label:'Repeat MINDS', run:goScore('MINDS')}],
+      mild: [{label:'Treatment per protocol', run:goMeds},
+             {label:'Repeat MINDS', run:goScore('MINDS')}],
+      none: [{label:'Repeat MINDS', run:goScore('MINDS')}]
+    },
+    PAWSS: {
+      high: [{label:'Prophylaxis dosing', primary:true, run:goMeds},
+             {label:'Start CIWA', run:goScore('CIWA')},
+             {label:'or MINDS (ICU)', run:goScore('MINDS')}],
+      low: [{label:'Start CIWA', run:goScore('CIWA')}]
+    },
+    RASS: {
+      agitated: [{label:'Escalate WD treatment', primary:true, run:goMeds},
+                 {label:'Re-score CIWA', run:goScore('CIWA')}],
+      restless: [{label:'Re-score withdrawal', run:goScore('CIWA')}],
+      deepSed: [{label:'Sedation lightening (meds)', run:goMeds}]
+    },
+    SAS: {
+      agitated: [{label:'Escalate WD treatment', primary:true, run:goMeds},
+                 {label:'Re-score CIWA', run:goScore('CIWA')}],
+      deepSed: [{label:'Sedation lightening (meds)', run:goMeds}]
+    },
+    CAMICU: {
+      positive: [{label:'Delirium pathway (meds)', primary:true, run:goMeds},
+                 {label:'Check RASS', run:goScore('RASS')}]
+    },
+    GCS: {
+      severe: [{label:'Airway / ICU meds', primary:true, run:goMeds}]
+    },
+    DSM5: {
+      severe: [{label:'See MAT options', primary:true, run:goMeds}],
+      moderate: [{label:'See MAT options', primary:true, run:goMeds}],
+      mild: [{label:'See MAT options', run:goMeds}]
+    },
+    AUDIT: {
+      mod: [{label:'Confirm with DSM-5', primary:true, run:goScore('DSM5')}],
+      high: [{label:'Confirm with DSM-5', primary:true, run:goScore('DSM5')},
+             {label:'See MAT options', run:goMeds}],
+      'very-high': [{label:'See MAT options', primary:true, run:goMeds},
+                    {label:'Confirm with DSM-5', run:goScore('DSM5')}]
+    },
+    AUDITC: {
+      high: [{label:'Confirm with DSM-5', primary:true, run:goScore('DSM5')},
+             {label:'Run AUDIT (full)', run:goScore('AUDIT')}]
+    },
+    CAGE: {
+      high: [{label:'Confirm with DSM-5', primary:true, run:goScore('DSM5')}]
+    }
+  };
+  return (T[scoreId] && T[scoreId][tier]) || [];
+}
+
+/* ============================================================
    MODAL — score entry
    ============================================================ */
 let currentScore = null;
@@ -818,12 +907,23 @@ function showInterpretation(entry) {
   $('#modal-title').textContent = `${entry.name}: ${entry.score}`;
   const body = $('#modal-body');
   body.innerHTML = '';
+
+  const acts = tierActions(entry.id, entry.tier);
+  const actsBlock = acts.length ? el('div', { class:'reco', style:'margin:10px 0 0;padding:10px' }, [
+    el('div', { class:'label' }, 'Recommendations'),
+    el('div', { class:'actions' }, acts.map(a => el('button', {
+      class: a.primary ? '' : 'secondary',
+      onclick: () => { closeModal(); a.run(); }
+    }, a.label)))
+  ]) : null;
+
   const card = el('div', { class:'interp' }, [
     el('h4', {}, 'Result'),
     el('div', { class:'row' }, [
       el('div', { class:'pill ' + entry.pill }, entry.tierText),
     ]),
     entry.notes && entry.notes.length ? el('ul', {}, entry.notes.map(n => el('li', {}, n))) : null,
+    actsBlock,
     el('div', { class:'cite' }, [
       'Reference: ',
       el('a', { href: entry.cite.url, target:'_blank', rel:'noopener' }, entry.cite.text)
@@ -831,7 +931,7 @@ function showInterpretation(entry) {
   ]);
   body.appendChild(card);
 
-  // contextual next-step from new recommendation
+  // contextual next-step from recommendation engine (global)
   const next = recommend();
   body.appendChild(el('div', { class:'reco', style:'margin:14px 0 0' }, [
     el('div', { class:'label' }, 'Next best'),
@@ -844,7 +944,9 @@ function showInterpretation(entry) {
   ]));
 
   $('#modal-foot').innerHTML = '';
-  $('#modal-foot').appendChild(el('div', { class:'score-out muted tiny' }, 'Saved to timeline.'));
+  $('#modal-foot').appendChild(el('div', { class:'score-out muted tiny' }, `Saved ${fmtTime(entry.time)}`));
+  $('#modal-foot').appendChild(el('button', { class:'secondary',
+    onclick: () => { closeModal(); openScore(entry.id); } }, 'Re-score'));
   $('#modal-foot').appendChild(el('button', { onclick: closeModal }, 'Done'));
   $('#modal-back').classList.add('open');
 }
@@ -943,12 +1045,38 @@ function renderTiles() {
       const def = SCORES[id]; if (!def) return;
       const res = S.results[id];
       const recommended = rec.id === id;
-      const tile = el('button', { class: 'tile' + (recommended ? ' recommended' : ''),
-        onclick: () => openScore(id) }, [
+
+      const head = el('div', { class:'tile-head' }, [
         el('div', { class:'name' }, def.name),
+        res ? el('span', { class:'pill ' + res.pill + ' tile-pill' }, res.tier) : null
+      ]);
+
+      const tile = el('div', {
+        class: 'tile' + (recommended ? ' recommended' : ''),
+        role: 'button', tabindex: '0',
+        onclick: () => openScore(id),
+        onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openScore(id); } }
+      }, [
+        head,
         el('div', { class:'sub' }, def.full),
         res ? el('div', { class:'last' }, `${res.score} · ${fmtTime(res.time)}`) : null
       ]);
+
+      if (res) {
+        const acts = tierActions(id, res.tier);
+        const primary = acts.find(a => a.primary) || acts[0];
+        const row = el('div', { class:'tile-actions' });
+        if (primary) {
+          row.appendChild(el('button', { class:'tile-act primary',
+            onclick: (e) => { e.stopPropagation(); primary.run(); }
+          }, primary.label));
+        }
+        row.appendChild(el('button', { class:'tile-act',
+          onclick: (e) => { e.stopPropagation(); showInterpretation(res); }
+        }, 'Recs ▸'));
+        tile.appendChild(row);
+      }
+
       host.appendChild(tile);
     });
   }

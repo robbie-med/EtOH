@@ -1,7 +1,7 @@
 // EtOH Withdrawal Tool — Service Worker
 // Cache-first for app shell so the tool remains usable offline at the bedside.
 
-const VERSION = 'etoh-wd-v1';
+const VERSION = 'etoh-wd-v2';
 const SHELL = [
   './',
   './index.html',
