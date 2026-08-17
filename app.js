@@ -11,6 +11,29 @@ if (typeof structuredClone !== 'function') {
   window.structuredClone = (v) => JSON.parse(JSON.stringify(v));
 }
 
+/* ============================================================
+   INTENDED USE / PROVENANCE
+   ------------------------------------------------------------
+   APP_VERSION bumps on any change to scoring logic, thresholds or dosing.
+   CONTENT_REVIEWER / CONTENT_REVIEWED stay null until a named, credentialed
+   clinician has actually reviewed the content end to end. Do NOT populate
+   them with a placeholder name or a guessed date — the UI states plainly
+   that the content is unreviewed while they are null, and that statement
+   must remain true.
+   ============================================================ */
+const APP_VERSION     = '0.2.0';
+const CONTENT_REVIEWER = null;   // e.g. 'A. Clinician, MD (addiction medicine)'
+const CONTENT_REVIEWED = null;   // e.g. '2026-08-16'  (ISO date of that review)
+
+const INTENDED_USE =
+  'For use by licensed healthcare professionals only. Not for patient self-assessment, ' +
+  'and not for use by patients or caregivers to make treatment decisions.';
+
+const NOT_A_SUBSTITUTE =
+  'This tool provides decision support. It does not replace clinical judgement, ' +
+  'examination, or local protocol. Verify every dose against your own formulary ' +
+  'and institutional guideline before administration.';
+
 /* ---------- Citations (canonical links) ---------- */
 const CITE = {
   AUDIT: { text: 'Saunders JB et al. AUDIT (WHO, 2nd ed., 2001).', url: 'https://www.who.int/publications/i/item/audit-the-alcohol-use-disorders-identification-test-guidelines-for-use-in-primary-health-care' },
@@ -28,7 +51,7 @@ const CITE = {
   ASAM2020: { text: 'ASAM Clinical Practice Guideline on Alcohol Withdrawal Management (2020).', url: 'https://www.asam.org/quality-care/clinical-guidelines/alcohol-withdrawal-management-guideline' },
   ROSENSON: { text: 'Rosenson J et al. Phenobarbital for acute alcohol withdrawal — RCT. J Emerg Med. 2013;44:592-8.', url: 'https://pubmed.ncbi.nlm.nih.gov/22999778/' },
   MUELLER: { text: 'Mueller SW et al. Dexmedetomidine for alcohol withdrawal. Crit Care Med. 2014;42:1131-9.', url: 'https://pubmed.ncbi.nlm.nih.gov/24351375/' },
-  WERNICKE: { text: 'Royal College / EFNS guidance on thiamine in suspected Wernicke encephalopathy.', url: 'https://onlinelibrary.wiley.com/doi/10.1111/j.1468-1331.2010.03153.x' },
+  WERNICKE: { text: 'Thiamine in suspected Wernicke encephalopathy. High-dose (500 mg IV TID) per Royal College of Physicians / BAP and usual US practice; EFNS (Galvin 2010, linked) recommends ≥200 mg TID — regimens differ, follow local protocol.', url: 'https://onlinelibrary.wiley.com/doi/10.1111/j.1468-1331.2010.03153.x' },
   NALTREXONE: { text: 'VA/DoD Substance Use Disorder Guideline 2021 (naltrexone, acamprosate).', url: 'https://www.healthquality.va.gov/guidelines/MH/sud/' },
   MAT: { text: 'SAMHSA TIP 49 — Incorporating Alcohol Pharmacotherapies Into Medical Practice.', url: 'https://www.samhsa.gov/resource/ebp/tip-49-incorporating-alcohol-pharmacotherapies-medical-practice' }
 };
@@ -36,7 +59,10 @@ const CITE = {
 /* ============================================================
    STATE  (ephemeral, single active patient, localStorage cache)
    ============================================================ */
-const LS_KEY = 'etoh-wd-state-v1';
+// v2: MINDS was corrected from a non-standard 10-item 0–40 scale to the published
+// 9-item 0–46 instrument. Cached v1 MINDS scores are not comparable to v2 scores, so
+// the key is bumped to drop stale state rather than silently mix the two in history.
+const LS_KEY = 'etoh-wd-state-v2';
 const STATE_DEFAULT = {
   // patient context — entered manually
   ageBand: null,           // 'lt65' | 'ge65'
@@ -146,11 +172,11 @@ AUDIT: {
   ],
   interpret(score) {
     if (score <= 7)  return { tier:'low', pill:'ok',     text:'Low-risk drinking',    notes:['Brief education; rescreen.'] };
-    if (score <= 15) return { tier:'mod', pill:'warn',   text:'Hazardous / harmful (Zone II)',
-                              notes:['Brief intervention.', 'Consider AUDIT-C for ongoing monitoring.'] };
-    if (score <= 19) return { tier:'high',pill:'danger', text:'Likely dependence (Zone III)',
-                              notes:['Brief intervention + continued monitoring; refer for assessment.'] };
-    return                    { tier:'very-high', pill:'danger', text:'Severe dependence (Zone IV)',
+    if (score <= 15) return { tier:'mod', pill:'warn',   text:'Hazardous drinking (Zone II)',
+                              notes:['Simple advice / brief intervention.'] };
+    if (score <= 19) return { tier:'high',pill:'danger', text:'Harmful drinking (Zone III)',
+                              notes:['Brief counselling + continued monitoring.','Refer for diagnostic evaluation if indicated.'] };
+    return                    { tier:'very-high', pill:'danger', text:'Possible dependence (Zone IV)',
                               notes:['Refer to specialist treatment; consider MAT (naltrexone / acamprosate).'] };
   }
 },
@@ -173,7 +199,7 @@ AUDITC: {
       {label:'Monthly', value:2},{label:'Weekly', value:3},{label:'Daily or almost daily', value:4}]},
   ],
   interpret(score) {
-    if (score >= 4)  return { tier:'high', pill:'danger', text:'Positive screen (≥4)',
+    if (score >= 4)  return { tier:'high', pill:'danger', text:'Positive screen (≥4, any sex)',
                               notes:['Sensitive for AUD; pursue AUDIT-10 or DSM-5 criteria.','Consider PAWSS if hospitalized.'] };
     if (score === 3) return { tier:'high', pill:'warn', text:'Borderline (3) — positive in women',
                               notes:['Canonical cutoff: ≥4 in men, ≥3 in women.','If patient is female, treat as positive: pursue AUDIT-10 or DSM-5 criteria.','If male, negative — re-screen periodically.'] };
@@ -262,7 +288,7 @@ PAWSS: {
 CIWA: {
   id:'CIWA', name:'CIWA-Ar', full:'Clinical Institute Withdrawal Assessment for Alcohol, Revised',
   category:'active', cite: CITE.CIWA,
-  intro:'10 items. Requires cooperative, verbal patient. Range 0–67. Drives symptom-triggered benzodiazepine dosing.',
+  intro:'10 items. Requires cooperative, verbal patient. Range 0–67. The 0–67 scale and its item anchors are from Sullivan 1989; the severity bands and the benzodiazepine doses tied to them come from symptom-triggered protocols (ASAM 2020), not from the instrument.',
   items: [
     { q:'1. Nausea / vomiting', helper:'"Do you feel sick to your stomach? Have you vomited?"', type:'row',
       opts: [
@@ -370,7 +396,7 @@ CIWA: {
 GMAWS: {
   id:'GMAWS', name:'GMAWS', full:'Glasgow Modified Alcohol Withdrawal Scale',
   category:'active', cite: CITE.GMAWS,
-  intro:'5 items, each 0–2 (max 10). Validated alternative to CIWA, simpler to administer.',
+  intro:'5 items, each 0–2 (max 10). Validated alternative to CIWA, simpler to administer. Dose tiers and reassessment intervals shown are the NHS GG&C GMAWS protocol, not part of the scale itself.',
   items: [
     { q:'Tremor', opts:[
       {value:0, label:'0 — none'},{value:1, label:'1 — on movement'},{value:2, label:'2 — at rest'}]},
@@ -384,14 +410,17 @@ GMAWS: {
       {value:0, label:'0 — settled'},{value:1, label:'1 — anxious / restless'},{value:2, label:'2 — distressed / pacing'}]},
   ],
   interpret(score) {
-    if (score >= 7) return { tier:'severe',  pill:'danger', text:'Severe withdrawal (≥7)',
-                             notes:['Consider higher acuity / phenobarbital pathway per local protocol.'] };
-    if (score >= 4) return { tier:'moderate',pill:'warn',  text:'Moderate withdrawal (4–6)',
-                             notes:['Symptom-triggered benzodiazepine; reassess q1–2h.'] };
+    if (score >= 9) return { tier:'severe',  pill:'danger', text:'Severe withdrawal (9–10)',
+                             notes:['Diazepam 20 mg PO/IV ×1 (or lorazepam 4 mg); reassess in 1h.',
+                                    'Escalate urgently if GMAWS stays ≥8 beyond 1h, seizure, respiratory compromise, HR >140 or <50, SBP >180 or <90, or poor response to repeated doses.'] };
+    if (score >= 4) return { tier:'moderate',pill:'warn',  text:'Moderate withdrawal (4–8)',
+                             notes:['Diazepam 20 mg PO/IV ×1 (or lorazepam 4 mg); reassess in 1h.',
+                                    'Escalate urgently if GMAWS stays ≥8 beyond 1h or poor response to repeated doses.'] };
     if (score >= 1) return { tier:'mild',    pill:'warn',  text:'Mild withdrawal (1–3)',
-                             notes:['Supportive care; rescore in 1–2h.'] };
+                             notes:['Diazepam 10 mg PO/IV ×1 (or lorazepam 2 mg) — any score ≥1 is treated.',
+                                    'Reassess in 2h.'] };
     return                   { tier:'none',    pill:'ok',    text:'No withdrawal (0)',
-                             notes:['Continue routine monitoring.'] };
+                             notes:['No benzodiazepine; reassess in 2h.'] };
   }
 },
 
@@ -399,56 +428,48 @@ GMAWS: {
 MINDS: {
   id:'MINDS', name:'MINDS', full:'Minnesota Detoxification Scale',
   category:'active', cite: CITE.MINDS,
-  intro:'Objective scale for severe / non-verbal / ICU patients. 10 items, max 40. Score ≥20 = severe.',
+  intro:'Objective scale for severe / non-verbal / ICU patients. 9 weighted items, range 0–46 (DeCarolis 2007, Table 1). The scale defines no severity bands — thresholds shown are the associated high-dose diazepam protocol’s treatment tiers.',
   items: [
-    { q:'1. Pulse (bpm)', opts:[
-      {value:0,label:'0 — <90'},{value:1,label:'1 — 90–100'},{value:2,label:'2 — 101–110'},
-      {value:3,label:'3 — 111–120'},{value:4,label:'4 — >120'} ]},
-    { q:'2. Diastolic BP (mmHg)', opts:[
-      {value:0,label:'0 — <95'},{value:1,label:'1 — 95–100'},{value:2,label:'2 — 101–105'},
-      {value:3,label:'3 — 106–110'},{value:4,label:'4 — >110'} ]},
+    { q:'1. Pulse (beats/min)', opts:[
+      {value:0,label:'0 — <90'},{value:1,label:'1 — 90–110'},{value:2,label:'2 — >110'} ]},
+    { q:'2. Diastolic blood pressure (mmHg)', opts:[
+      {value:0,label:'0 — <90'},{value:1,label:'1 — 90–110'},{value:2,label:'2 — >110'} ]},
     { q:'3. Tremor', opts:[
-      {value:0,label:'0 — none'},{value:1,label:'1 — barely elicited'},
-      {value:2,label:'2 — visible at rest, fades'},{value:3,label:'3 — moderate at rest'},
-      {value:4,label:'4 — severe at rest'} ]},
+      {value:0,label:'0 — absent'},{value:2,label:'2 — visible'},
+      {value:4,label:'4 — moderate'},{value:6,label:'6 — severe'} ]},
     { q:'4. Sweat', opts:[
-      {value:0,label:'0 — none'},{value:1,label:'1 — palms moist'},
-      {value:2,label:'2 — beads on forehead'},{value:3,label:'3 — head/trunk diaphoretic'},
-      {value:4,label:'4 — whole body diaphoretic'} ]},
+      {value:0,label:'0 — absent'},{value:2,label:'2 — barely; moist palms'},
+      {value:4,label:'4 — beads visible'},{value:6,label:'6 — drenching'} ]},
     { q:'5. Hallucinations', opts:[
-      {value:0,label:'0 — none'},{value:1,label:'1 — mild auditory/visual/tactile'},
-      {value:2,label:'2 — moderate'},{value:3,label:'3 — severe'},
-      {value:4,label:'4 — continuous'} ]},
+      {value:0,label:'0 — absent'},{value:1,label:'1 — mild'},
+      {value:2,label:'2 — moderate, intermittent'},{value:3,label:'3 — severe, continuous'} ]},
     { q:'6. Agitation', opts:[
-      {value:0,label:'0 — none'},{value:1,label:'1 — restless'},
-      {value:2,label:'2 — moderately fidgety'},{value:3,label:'3 — requiring restraint'},
-      {value:4,label:'4 — combative'} ]},
-    { q:'7. Orientation', opts:[
-      {value:0,label:'0 — oriented x4'},{value:1,label:'1 — disoriented to time'},
-      {value:2,label:'2 — disoriented to place'},{value:3,label:'3 — disoriented to person'},
-      {value:4,label:'4 — disoriented to self'} ]},
+      {value:0,label:'0 — normal activity'},{value:3,label:'3 — somewhat greater than normal'},
+      {value:6,label:'6 — moderately fidgety, restless'},{value:9,label:'9 — pacing, thrashing'} ]},
+    { q:'7. Orientation', helper:'Score 0 if intubated or otherwise unable to be assessed.', opts:[
+      {value:0,label:'0 — oriented ×3 (person, place, time), or intubated / unable to assess'},
+      {value:2,label:'2 — oriented ×2 (person, place)'},
+      {value:4,label:'4 — oriented ×1 (person)'},
+      {value:6,label:'6 — total disorientation'} ]},
     { q:'8. Delusions', opts:[
-      {value:0,label:'0 — none'},{value:1,label:'1 — fears about fictitious events'},
-      {value:2,label:'2 — delusional but reorients'},{value:3,label:'3 — delusional, cannot reorient'},
-      {value:4,label:'4 — fixed delusions / paranoid'} ]},
+      {value:0,label:'0 — absent'},{value:6,label:'6 — present'} ]},
     { q:'9. Seizures', opts:[
-      {value:0,label:'0 — none ever'},{value:1,label:'1 — history of WD seizures'},
-      {value:2,label:'2 — seizure in last 24 h'},{value:3,label:'3 — seizure this admission'},
-      {value:4,label:'4 — current status epilepticus'} ]},
-    { q:'10. Hot / cold flashes', opts:[
-      {value:0,label:'0 — none'},{value:1,label:'1 — mild'},
-      {value:2,label:'2 — moderate'},{value:3,label:'3 — severe'},
-      {value:4,label:'4 — continuous severe'} ]},
+      {value:0,label:'0 — absent'},{value:6,label:'6 — present'} ]},
   ],
   interpret(score) {
-    if (score >= 20) return { tier:'very-severe', pill:'danger', text:'Severe withdrawal (≥20)',
-                              notes:['ICU care; consider phenobarbital protocol +/− dexmedetomidine.'] };
-    if (score >= 10) return { tier:'moderate',    pill:'warn', text:'Moderate withdrawal (10–19)',
-                              notes:['Symptom-triggered benzodiazepines q1h; escalate if persists.'] };
-    if (score >= 5)  return { tier:'mild',        pill:'warn', text:'Mild withdrawal (5–9)',
-                              notes:['Treat per protocol; reassess q2h.'] };
-    return                    { tier:'none',        pill:'ok',   text:'Minimal / none (<5)',
-                              notes:['Continue routine monitoring.'] };
+    // The published scale defines no mild/moderate/severe bands. The bands below are the
+    // score-driven treatment thresholds from the MINDS high-dose front-loading diazepam
+    // protocol (Allina Health / Patel et al.), not part of the instrument itself.
+    if (score > 20)  return { tier:'very-severe', pill:'danger', text:'Score >20 — highest treatment tier',
+                              notes:['Protocol tier: highest front-loaded diazepam dose; reassess q1h.',
+                                     'Consider ICU, phenobarbital protocol +/− dexmedetomidine.'] };
+    if (score >= 14) return { tier:'severe',      pill:'danger', text:'Score 14–20 — high treatment tier',
+                              notes:['Protocol tier: intermediate front-loaded diazepam dose; reassess q1h.',
+                                     'Escalate if score does not fall after successive doses.'] };
+    if (score >= 7)  return { tier:'moderate',    pill:'warn',  text:'Score 7–13 — treatment threshold',
+                              notes:['Protocol tier: initial front-loaded diazepam dose; reassess q1–2h.'] };
+    return                   { tier:'none',        pill:'ok',    text:'Score <7 — below treatment threshold',
+                              notes:['Continue scheduled monitoring; no dose indicated by score alone.'] };
   }
 },
 
@@ -521,8 +542,8 @@ CAMICU: {
   items: [
     { q:'Feature 1 — Acute change OR fluctuating course of mental status (vs baseline) in last 24h?', opts:[
       {value:0,label:'Absent'},{value:1,label:'Present'}]},
-    { q:'Feature 2 — Inattention (≥2 errors on Letters or Pictures test, e.g., "SAVEAHAART")', opts:[
-      {value:0,label:'Absent (0–1 errors)'},{value:1,label:'Present (≥2 errors)'}]},
+    { q:'Feature 2 — Inattention (>2 errors on Letters or Pictures test, e.g., "SAVEAHAART")', opts:[
+      {value:0,label:'Absent (0–2 errors)'},{value:1,label:'Present (>2 errors)'}]},
     { q:'Feature 3 — Altered level of consciousness (RASS ≠ 0 currently)', opts:[
       {value:0,label:'No (RASS = 0)'},{value:1,label:'Yes (RASS ≠ 0)'}]},
     { q:'Feature 4 — Disorganized thinking (yes/no questions + commands, ≥2 errors)', opts:[
@@ -727,13 +748,16 @@ function tierActions(scoreId, tier) {
       none: [{label:'Repeat in 2–4 h', run:goScore('GMAWS')}]
     },
     MINDS: {
+      // Tiers track MINDS.interpret(): >20 / 14-20 / 7-13 / <7. There is no
+      // 'mild' tier — the scale's lowest band is "below treatment threshold".
       'very-severe': [{label:'ICU / phenobarb ± dex', primary:true, run:goMeds},
                       {label:'Add RASS', run:goScore('RASS')},
                       {label:'CAM-ICU', run:goScore('CAMICU')}],
+      severe: [{label:'Front-load benzo', primary:true, run:goMeds},
+               {label:'Add RASS', run:goScore('RASS')},
+               {label:'Repeat MINDS', run:goScore('MINDS')}],
       moderate: [{label:'Benzo dosing q1h', primary:true, run:goMeds},
                  {label:'Repeat MINDS', run:goScore('MINDS')}],
-      mild: [{label:'Treatment per protocol', run:goMeds},
-             {label:'Repeat MINDS', run:goScore('MINDS')}],
       none: [{label:'Repeat MINDS', run:goScore('MINDS')}]
     },
     PAWSS: {
@@ -1130,6 +1154,18 @@ function renderReco() {
    ============================================================ */
 function renderMeds() {
   const root = $('#view-meds'); root.innerHTML = '';
+  // Dose verification notice sits at the top of the dosing view, not only in About —
+  // this is where the risk concentrates and nobody navigates to About first.
+  root.appendChild(el('section', { class:'block' }, [
+    el('div', { class:'interp' }, [
+      el('h4', {}, 'Verify before administering'),
+      el('div', { class:'tiny' }, NOT_A_SUBSTITUTE),
+      el('div', { class:'tiny', style:'margin-top:6px' },
+        'Doses below are typical adult ranges from the cited guidelines. They are not ' +
+        'adjusted for renal or hepatic impairment, interactions, or weight beyond what ' +
+        'is stated. Confirm against your formulary.')
+    ])
+  ]));
 
   // ---- Acute withdrawal treatment section ----
   const secAcute = el('section', { class:'block' }, [
@@ -1140,9 +1176,9 @@ function renderMeds() {
     scope:'Floor patient, cooperative, no severe liver disease',
     cite: CITE.ASAM2020,
     rows: [
-      ['CIWA 8–10', 'Lorazepam 1 mg PO/IV  ·  or Diazepam 5 mg PO/IV  ·  or Chlordiazepoxide 25–50 mg PO'],
+      ['CIWA 8–9',  'Lorazepam 1 mg PO/IV  ·  or Diazepam 5 mg PO/IV  ·  or Chlordiazepoxide 25–50 mg PO'],
       ['CIWA 10–15','Lorazepam 2 mg PO/IV  ·  Diazepam 10 mg PO/IV  ·  Chlordiazepoxide 50–100 mg PO'],
-      ['CIWA 15–20','Lorazepam 2–4 mg PO/IV  ·  Diazepam 10–20 mg PO/IV'],
+      ['CIWA 16–20','Lorazepam 2–4 mg PO/IV  ·  Diazepam 10–20 mg PO/IV'],
       ['CIWA >20', 'Lorazepam 4 mg IV  ·  Diazepam 20 mg IV  —  reassess q1h, consider front-loading / phenobarb'],
     ],
     note:'Reassess q1–2h. Hold for somnolence / RR<10. Diazepam preferred (long-acting auto-taper) UNLESS liver disease, elderly, or unstable — then lorazepam.',
@@ -1166,7 +1202,7 @@ function renderMeds() {
   }));
   secAcute.appendChild(medCard({
     title:'Severe / refractory — phenobarbital, ICU',
-    scope:'Escalating benzo needs, DT, seizures, MINDS ≥20, CIWA >20',
+    scope:'Escalating benzo needs, DT, seizures, MINDS >20, CIWA >20',
     cite: CITE.ASAM2020,
     rows: [
       ['Phenobarbital load', '10 mg/kg IBW IV over 30 min'],
@@ -1187,7 +1223,7 @@ function renderMeds() {
     cite: CITE.WERNICKE,
     rows: [
       ['Prophylaxis', 'Thiamine 100 mg IV/IM daily × 3–5 days, then 100 mg PO daily'],
-      ['Suspected Wernicke', 'Thiamine 500 mg IV TID × 2–3 days, then 250 mg IM/IV daily × 5 d, then PO'],
+      ['Suspected Wernicke', 'Thiamine 500 mg IV TID × 2–3 days, then 250 mg IM/IV daily × 5 d, then PO  (EFNS: ≥200 mg TID)'],
       ['Folate', '1 mg PO daily'],
       ['Multivitamin', '1 tab PO daily'],
       ['Magnesium', 'Replete to >2.0 mg/dL'],
@@ -1387,7 +1423,7 @@ function buildAsciiTrend() {
   const tracks = [
     { id:'CIWA',  range:[0,30] },
     { id:'GMAWS', range:[0,10] },
-    { id:'MINDS', range:[0,30] },
+    { id:'MINDS', range:[0,46] },
     { id:'RASS',  range:[-5,4] },
   ];
   const lines = [];
@@ -1632,11 +1668,29 @@ function openAbout() {
   $('#modal-title').textContent = 'EtOH WD — About';
   const body = $('#modal-body'); body.innerHTML = '';
   body.appendChild(el('div', { class:'interp' }, [
+    el('h4', {}, 'Intended use'),
+    el('div', { class:'tiny' }, INTENDED_USE)
+  ]));
+  body.appendChild(el('div', { class:'interp', style:'margin-top:10px' }, [
     el('h4', {}, 'Decision-support, not authority'),
+    el('div', { class:'tiny' }, NOT_A_SUBSTITUTE)
+  ]));
+  body.appendChild(el('div', { class:'interp', style:'margin-top:10px' }, [
+    el('h4', {}, 'Version & review status'),
+    el('div', { class:'tiny' }, reviewLine()),
+    el('div', { class:'tiny', style:'margin-top:6px' },
+      'Scoring instruments are reproduced from the published sources listed below. ' +
+      'Where a treatment threshold or dosing tier comes from a named protocol rather ' +
+      'than from the instrument itself, that is stated at the point of use. ' +
+      'Guidelines change; confirm this version is current before relying on it.')
+  ]));
+  body.appendChild(el('div', { class:'interp', style:'margin-top:10px' }, [
+    el('h4', {}, 'Data handling'),
     el('div', { class:'tiny' },
-      'This tool reproduces standard published scoring instruments and consensus dosing ranges. ' +
-      'It assists, but does not replace, clinical judgement and local protocol. Verify every dose. ' +
-      'No patient identifiers are intended to live on this device.')
+      'No accounts, no analytics, no network calls. The tool collects no name, date of ' +
+      'birth, or other identifier, and nothing entered leaves the device. A single ' +
+      'in-progress patient’s categorical entries and scores are held in this browser’s ' +
+      'localStorage until cleared with “New pt” or by uninstalling the app.')
   ]));
   const sources = el('div', { class:'interp', style:'margin-top:10px' }, [ el('h4', {}, 'Primary sources') ]);
   const ul = el('ul', {});
@@ -1668,9 +1722,40 @@ function bind() {
   if (!S.setting) setTimeout(openContextEditor, 250);
 }
 
+/* ---------- First-run acknowledgement gate ----------
+   Kept under its own localStorage key so that clearing the current patient
+   ("New pt") does not re-prompt, and so that clearing the gate does not
+   discard clinical state. Acknowledgement is re-prompted when APP_VERSION
+   changes, since thresholds and dosing may have moved.                     */
+const GATE_KEY = 'etoh-wd-ack';
+
+function reviewLine() {
+  return (CONTENT_REVIEWER && CONTENT_REVIEWED)
+    ? `Version ${APP_VERSION} · content reviewed ${CONTENT_REVIEWED} by ${CONTENT_REVIEWER}.`
+    : `Version ${APP_VERSION} · content has NOT been independently reviewed by a named clinician.`;
+}
+
+function showGate() {
+  const back = $('#gate-back');
+  const line = $('#gate-review');
+  if (line) line.textContent = reviewLine();
+  back.classList.add('open');
+  $('#gate-ok').addEventListener('click', () => {
+    try { localStorage.setItem(GATE_KEY, APP_VERSION); } catch (e) {}
+    back.classList.remove('open');
+  }, { once: true });
+}
+
+function maybeGate() {
+  let ack = null;
+  try { ack = localStorage.getItem(GATE_KEY); } catch (e) {}
+  if (ack !== APP_VERSION) showGate();
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   bind();
   renderAll();
+  maybeGate();
 });
 
 })();

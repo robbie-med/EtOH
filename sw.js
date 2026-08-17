@@ -1,7 +1,10 @@
 // EtOH Withdrawal Tool — Service Worker
-// Cache-first for app shell so the tool remains usable offline at the bedside.
+// Network-first for the app shell, with a cache fallback so the tool remains
+// usable offline at the bedside.
 
-const VERSION = 'etoh-wd-v3';
+// Bump on every release. The activate handler drops all other caches, so an
+// installed PWA picks up corrections instead of serving stale dosing forever.
+const VERSION = 'etoh-wd-v4';
 const SHELL = [
   './',
   './index.html',
@@ -32,15 +35,21 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
+  // Network-first for the app shell, cache as fallback.
+  //
+  // This is deliberately NOT cache-first. Cache-first keeps an installed PWA on
+  // whatever scoring thresholds and doses it first downloaded, which for a
+  // clinical dosing tool means a published correction may never reach the
+  // bedside. Correctness of doses outranks a few hundred ms of load time; the
+  // cache fallback preserves full offline use when there is no network.
   event.respondWith(
-    caches.match(req).then((cached) => {
-      if (cached) return cached;
-      return fetch(req).then((resp) => {
-        if (!resp || !resp.ok) return resp;
-        const copy = resp.clone();
-        caches.open(VERSION).then((cache) => cache.put(req, copy));
-        return resp;
-      }).catch(() => caches.match('./index.html'));
-    })
+    fetch(req).then((resp) => {
+      if (!resp || !resp.ok) throw new Error('bad response');
+      const copy = resp.clone();
+      caches.open(VERSION).then((cache) => cache.put(req, copy));
+      return resp;
+    }).catch(() =>
+      caches.match(req).then((cached) => cached || caches.match('./index.html'))
+    )
   );
 });

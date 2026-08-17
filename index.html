@@ -21,6 +21,10 @@
   <button id="btn-new" class="danger" title="Clear patient">New pt</button>
 </header>
 
+<div class="use-bar" id="use-bar" role="note">
+  <b>For licensed clinicians.</b> Decision support only — not for patient self-assessment. Verify every dose.
+</div>
+
 <div class="context" id="context"></div>
 <div id="reco"></div>
 
@@ -47,6 +51,26 @@
 <main id="view-note" hidden></main>
 <main id="view-forget" hidden></main>
 <main id="view-history" hidden></main>
+
+<div class="gate-back" id="gate-back" role="dialog" aria-modal="true" aria-labelledby="gate-title">
+  <div class="gate">
+    <h2 id="gate-title">Before you use this tool</h2>
+    <div class="warn-box">
+      <p><b>This tool is for licensed healthcare professionals.</b> It is not for
+      patient self-assessment, and not for patients or caregivers to make
+      treatment decisions.</p>
+    </div>
+    <p><b>Decision support only.</b> It does not replace clinical judgement,
+    examination, or your local protocol. <b>Verify every dose</b> against your own
+    formulary and institutional guideline before administration.</p>
+    <p>Scoring instruments are reproduced from their published sources and linked
+    in-app. Some treatment thresholds and dosing tiers come from named protocols
+    rather than from the instrument itself, and are labelled where that is the case.
+    Guidelines change — check the version and review status under <b>About</b>.</p>
+    <p id="gate-review" class="tiny"></p>
+    <button id="gate-ok" type="button">I am a healthcare professional — continue</button>
+  </div>
+</div>
 
 <div class="modal-back" id="modal-back" role="dialog" aria-modal="true">
   <div class="modal">
